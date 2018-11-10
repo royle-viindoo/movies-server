@@ -41,10 +41,9 @@ type BoxOffice struct {
 // GetMovie method fetches a movie with given ID
 func (db *DB) GetMovie(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
 	result := Movie{}
 	//err := db.collection.Find(bson.M{"_id": bson.ObjectIdHex(id)}).One(&result)
-	err := db.collection.FindId(bson.ObjectIdHex(id)).One(&result)
+	err := db.collection.FindId(bson.ObjectIdHex(vars["id"])).One(&result)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Error fetches movie"))
@@ -87,13 +86,6 @@ func (db *DB) GetMovies(w http.ResponseWriter, r *http.Request) {
 
 // PostMovie method adds a new movie
 func (db *DB) PostMovie(w http.ResponseWriter, r *http.Request) {
-
-}
-
-// UpdateMovie modifies the data of given movie
-func (db *DB) UpdateMovie(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
 	data := Movie{}
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
@@ -102,7 +94,34 @@ func (db *DB) UpdateMovie(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error unmarshall movie: %v", err)
 		return
 	}
-	err = db.collection.Update(bson.M{"_id": bson.ObjectIdHex(id)}, bson.M{"$set": &data})
+	defer r.Body.Close()
+
+	data.ID = bson.NewObjectId()
+	err = db.collection.Insert(&data)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error create movie"))
+		log.Printf("Error create movie: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("Created succesfully!"))
+}
+
+// UpdateMovie modifies the data of given movie
+func (db *DB) UpdateMovie(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	data := Movie{}
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error update movie"))
+		log.Printf("Error unmarshall movie: %v", err)
+		return
+	}
+	defer r.Body.Close()
+
+	err = db.collection.Update(bson.M{"_id": bson.ObjectIdHex(vars["id"])}, bson.M{"$set": &data})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Error update movie"))
