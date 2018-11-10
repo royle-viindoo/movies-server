@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -39,12 +40,49 @@ type BoxOffice struct {
 
 // GetMovie method fetches a movie with given ID
 func (db *DB) GetMovie(w http.ResponseWriter, r *http.Request) {
-
+	vars := mux.Vars(r)
+	id := vars["id"]
+	result := Movie{}
+	//err := db.collection.Find(bson.M{"_id": bson.ObjectIdHex(id)}).One(&result)
+	err := db.collection.FindId(bson.ObjectIdHex(id)).One(&result)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetches movie"))
+		log.Printf("Error fetches movie: %v", err)
+		return
+	}
+	jsonResp, err := json.Marshal(&result)
+	//jsonResp, err := json.MarshalIndent(&result, "", "\t")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetches movie"))
+		log.Printf("Error marshall movie: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonResp)
 }
 
 // GetMovies method fetches movies
 func (db *DB) GetMovies(w http.ResponseWriter, r *http.Request) {
-
+	results := []Movie{}
+	err := db.collection.Find(bson.M{}).All(&results)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetches movies"))
+		log.Printf("Error fetches movies: %v", err)
+		return
+	}
+	jsonResp, err := json.Marshal(&results)
+	//jsonResp, err := json.MarshalIndent(&results, "", "\t")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetches movies"))
+		log.Printf("Error marshall movies: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonResp)
 }
 
 // PostMovie method adds a new movie
@@ -54,12 +92,39 @@ func (db *DB) PostMovie(w http.ResponseWriter, r *http.Request) {
 
 // UpdateMovie modifies the data of given movie
 func (db *DB) UpdateMovie(w http.ResponseWriter, r *http.Request) {
-
+	vars := mux.Vars(r)
+	id := vars["id"]
+	data := Movie{}
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error update movie"))
+		log.Printf("Error unmarshall movie: %v", err)
+		return
+	}
+	err = db.collection.Update(bson.M{"_id": bson.ObjectIdHex(id)}, bson.M{"$set": &data})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error update movie"))
+		log.Printf("Error update movie: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Updated succesfully!"))
 }
 
 // DeleteMovie removes the data of given movie
 func (db *DB) DeleteMovie(w http.ResponseWriter, r *http.Request) {
-
+	vars := mux.Vars(r)
+	err := db.collection.Remove(bson.M{"_id": bson.ObjectIdHex(vars["id"])})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error delete movie"))
+		log.Printf("Error delete movie: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Deleted succesfully!"))
 }
 
 func main() {
@@ -73,9 +138,9 @@ func main() {
 
 	r := mux.NewRouter()
 	sub := r.PathPrefix("/api/v1").Subrouter()
-	sub.HandleFunc("/movies/{id:[0-9]*}", db.GetMovie).Methods("GET")
-	sub.HandleFunc("/movies/{id:[0-9]*}", db.UpdateMovie).Methods("PUT")
-	sub.HandleFunc("/movies/{id:[0-9]*}", db.DeleteMovie).Methods("DELETE")
+	sub.HandleFunc("/movies/{id:[a-zA-Z0-9]*}", db.GetMovie).Methods("GET")
+	sub.HandleFunc("/movies/{id:[a-zA-Z0-9]*}", db.UpdateMovie).Methods("PUT")
+	sub.HandleFunc("/movies/{id:[a-zA-Z0-9]*}", db.DeleteMovie).Methods("DELETE")
 	sub.HandleFunc("/movies", db.GetMovies).Methods("GET")
 	sub.HandleFunc("/movies", db.PostMovie).Methods("POST")
 
